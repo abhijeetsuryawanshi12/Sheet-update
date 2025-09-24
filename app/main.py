@@ -16,6 +16,7 @@ origins = [
     "http://localhost",
     "http://localhost:3000", # The default port for React development servers
     "http://127.0.0.1:3000",
+    "https://*.vercel.app",
 ]
 
 app.add_middleware(
