@@ -1,0 +1,30 @@
+:root {
+  --primary-red: #e63946;
+  --secondary-red: #d90429;
+  --background-white: #f1faee;
+  --card-white: #ffffff;
+  --primary-text: #1d3557;
+  --secondary-text: #457b9d;
+  --border-color: #e0e0e0;
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-hover: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--background-white);
+  color: var(--primary-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--primary-red);
+  text-decoration: none;
+}
