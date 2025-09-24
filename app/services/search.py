@@ -23,35 +23,41 @@ class SearchService:
             print("Warning: Dataframe is empty. Search will not work.")
             return
 
-        # IMPORTANT: Ensure your Google Sheet column names EXACTLY match the keys here.
-        # e.g., "Latest Funding", not "Latest funding" or "Latest Funding "
+        # IMPORTANT: Using the exact column names you provided.
+        # This will fix the issue with 'Latest Funding' and 'Latest Funding Date'.
         self.df.rename(columns={
             "Company": "name",
-            "Sector": "sector",
-            "Valuation": "valuation",
             "Website": "website",
-            "Investors": "investors",
             "Latest Funding": "latest_funding",
             "Latest Funding Date": "latest_funding_date",
             "Total Funding": "total_funding",
+            "Investors": "investors",
+            "Valuation": "valuation",
             "Overview (Product, Model & Moat)": "overview",
+            "Sector": "sector",
+            "Sinarmas Interest": "sinarmas_interest",
+            "Implied Valuation": "implied_valuation",
+            "Share transfer allowed?": "share_transfer_allowed",
+            "Liquidity EZ": "liquidity_ez",
+            "Liquidity Forge": "liquidity_forge",
+            "Liquidity Nasdaq": "liquidity_nasdaq",
         }, inplace=True)
 
+        # Updated list of all expected columns based on the new model.
         expected_cols = [
-            'name', 'sector', 'valuation', 'website', 'investors', 
-            'latest_funding', 'latest_funding_date', 'total_funding', 'overview'
+            'name', 'website', 'latest_funding', 'latest_funding_date', 'total_funding',
+            'investors', 'valuation', 'overview', 'sector', 'sinarmas_interest',
+            'implied_valuation', 'share_transfer_allowed', 'liquidity_ez',
+            'liquidity_forge', 'liquidity_nasdaq'
         ]
 
-        # Ensure all expected columns exist, creating them if they don't.
+        # Ensure all expected columns exist, creating them if they don't to prevent errors.
         for col in expected_cols:
             if col not in self.df.columns:
-                print(f"Warning: Column '{col}' not found after renaming. Creating it as an empty column.")
+                print(f"Warning: Column for '{col}' not found after renaming. Creating it as an empty column.")
                 self.df[col] = ''
         
         # Create a combined text field for better semantic search context.
-        # This new method is more robust: it explicitly fills empty cells and converts
-        # each column to a string BEFORE concatenation. This prevents errors from
-        # mixed data types (e.g., numbers, dates, text) and empty cells (NaNs).
         self.df['search_text'] = (
             self.df['name'].fillna('').astype(str) + ". Sector: " + 
             self.df['sector'].fillna('').astype(str) + ". Website: " + 
@@ -63,7 +69,8 @@ class SearchService:
         )
 
         print("Creating vector embeddings for the data...")
-        self.embeddings = self.model.encode(self.df['search_text'].tolist(), show_progress_bar=True)
+        # Convert all data to string to avoid encoding errors
+        self.embeddings = self.model.encode(self.df['search_text'].astype(str).tolist(), show_progress_bar=True)
         print("Data loaded and processed successfully.")
 
     def _parse_valuation(self, valuation_str: str) -> float | None:
@@ -91,13 +98,12 @@ class SearchService:
         query_embedding = self.model.encode([query])
         similarities = cosine_similarity(query_embedding, self.embeddings)[0]
         
-        # Get the indices of the top_k most similar results
         top_k_indices = np.argsort(similarities)[-top_k:][::-1]
         
         results_df = self.df.iloc[top_k_indices].copy()
 
         # Replace any lingering NaN/NaT with None for JSON compatibility
-        results_df = results_df.replace({np.nan: None})
+        results_df = results_df.replace({pd.NaT: None, np.nan: None})
         
         return results_df.to_dict(orient='records')
 
@@ -115,17 +121,14 @@ class SearchService:
         results_df = self.df.copy()
 
         if name:
-            # Use the 'name' column to match the Pydantic model
             results_df = results_df[results_df['name'].str.contains(name, case=False, na=False)]
         
         if sector:
             results_df = results_df[results_df['sector'].str.lower() == sector.lower()]
 
         if valuation is not None:
-            # Parse the valuation string to a float
             parsed_valuation = self._parse_valuation(valuation)
             if parsed_valuation is not None:
-                # Create a boolean mask where valuation is greater or equal than the parsed value
                 valuations = results_df['valuation'].apply(self._parse_valuation)
                 results_df = results_df[valuations >= parsed_valuation]
 
@@ -136,7 +139,7 @@ class SearchService:
             results_df = results_df[results_df['investors'].str.contains(investors, case=False, na=False)]
 
         # Replace any lingering NaN/NaT with None for JSON compatibility
-        results_df = results_df.replace({np.nan: None})
+        results_df = results_df.replace({pd.NaT: None, np.nan: None})
 
         return results_df.to_dict(orient='records')
 
