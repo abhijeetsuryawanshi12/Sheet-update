@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
-  FaTimes, FaBuilding, FaGlobe, FaFileInvoiceDollar, FaChartBar, FaChartLine, FaInfoC  FaTags, FaHandHoldingUsd, FaArrowUp, FaArrowDown, FaUsers, FaTable, FaBalanceScale,
+  FaTimes, FaBuilding, FaGlobe, FaFileInvoiceDollar, FaChartBar, FaChartLine, FaInfoCircle,
+  FaTags, FaHandHoldingUsd, FaArrowUp, FaArrowDown, FaUsers, FaTable, FaBalanceScale,
   FaHandshake, FaFileSignature, FaWater
 } from 'react-icons/fa';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
