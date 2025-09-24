@@ -60,7 +60,12 @@ async def advanced_search_endpoint(
     sector: Optional[str] = Query(None, description="Filter by an exact sector name."),
     valuation: Optional[str] = Query(None, description="Minimum valuation (e.g., '$500M', '$1.2B')."),
     website: Optional[str] = Query(None, description="Website URL (case-insensitive, partial match)."),
-    investors: Optional[str] = Query(None, description="Investors (case-insensitive, partial match).")
+    investors: Optional[str] = Query(None, description="Investors (case-insensitive, partial match)."),
+    # --- NEW FILTERS ---
+    total_funding: Optional[str] = Query(None, description="Minimum total funding (e.g., '100M', '$2B')."),
+    sinarmas_interest: Optional[str] = Query(None, description="Filter by Sinarmas Interest level (High, Medium, Low)."),
+    share_transfer_allowed: Optional[str] = Query(None, description="Filter by share transfer permission (Yes, No).")
+    # -------------------
 ):
     """
     **Perform an advanced filtered search based on specific fields.**
@@ -68,13 +73,18 @@ async def advanced_search_endpoint(
     You can combine multiple filters. Only records matching all provided
     filters will be returned.
     
-    Example: `?sector=Fintech&valuation=$1B`
+    Example: `?sector=Fintech&valuation=$1B&sinarmas_interest=High`
     """
     results = search_service.advanced_search(
         name=name,
         sector=sector,
         valuation=valuation,
         website=website,
-        investors=investors
+        investors=investors,
+        # --- PASS NEW FILTERS TO SERVICE ---
+        total_funding=total_funding,
+        sinarmas_interest=sinarmas_interest,
+        share_transfer_allowed=share_transfer_allowed
+        # -----------------------------------
     )
     return results

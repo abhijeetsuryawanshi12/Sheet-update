@@ -23,8 +23,6 @@ class SearchService:
             print("Warning: Dataframe is empty. Search will not work.")
             return
 
-        # IMPORTANT: Using the exact column names you provided.
-        # This will fix the issue with 'Latest Funding' and 'Latest Funding Date'.
         self.df.rename(columns={
             "Company": "name",
             "Website": "website",
@@ -43,7 +41,6 @@ class SearchService:
             "Liquidity Nasdaq": "liquidity_nasdaq",
         }, inplace=True)
 
-        # Updated list of all expected columns based on the new model.
         expected_cols = [
             'name', 'website', 'latest_funding', 'latest_funding_date', 'total_funding',
             'investors', 'valuation', 'overview', 'sector', 'sinarmas_interest',
@@ -51,13 +48,11 @@ class SearchService:
             'liquidity_forge', 'liquidity_nasdaq'
         ]
 
-        # Ensure all expected columns exist, creating them if they don't to prevent errors.
         for col in expected_cols:
             if col not in self.df.columns:
                 print(f"Warning: Column for '{col}' not found after renaming. Creating it as an empty column.")
                 self.df[col] = ''
         
-        # Create a combined text field for better semantic search context.
         self.df['search_text'] = (
             self.df['name'].fillna('').astype(str) + ". Sector: " + 
             self.df['sector'].fillna('').astype(str) + ". Website: " + 
@@ -69,19 +64,19 @@ class SearchService:
         )
 
         print("Creating vector embeddings for the data...")
-        # Convert all data to string to avoid encoding errors
         self.embeddings = self.model.encode(self.df['search_text'].astype(str).tolist(), show_progress_bar=True)
         print("Data loaded and processed successfully.")
 
-    def _parse_valuation(self, valuation_str: str) -> float | None:
+    def _parse_monetary_value(self, value_str: str) -> float | None:
         """
-        Parse a valuation string like '$4B' or '$3.4M' into a float (in millions).
+        Parse a monetary string like '$4B', '1.2B', or '500M' into a float (in millions).
         Returns None if parsing fails.
         """
-        if not isinstance(valuation_str, str):
+        if not isinstance(value_str, str):
             return None
-
-        match = re.match(r'\$(\d+\.?\d*)([BM])', valuation_str, re.IGNORECASE)
+        
+        # Make the dollar sign optional and handle potential whitespace
+        match = re.match(r'\$?(\d+\.?\d*)\s*([BM])', value_str, re.IGNORECASE)
         if match:
             value = float(match.group(1))
             unit = match.group(2).upper()
@@ -101,8 +96,6 @@ class SearchService:
         top_k_indices = np.argsort(similarities)[-top_k:][::-1]
         
         results_df = self.df.iloc[top_k_indices].copy()
-
-        # Replace any lingering NaN/NaT with None for JSON compatibility
         results_df = results_df.replace({pd.NaT: None, np.nan: None})
         
         return results_df.to_dict(orient='records')
@@ -111,9 +104,13 @@ class SearchService:
         self,
         name: str | None = None,
         sector: str | None = None,
-        valuation: str | None = None, # Expect valuation as string now
+        valuation: str | None = None,
         website: str | None = None,
-        investors: str | None = None
+        investors: str | None = None,
+        # --- NEW PARAMS ---
+        total_funding: str | None = None,
+        sinarmas_interest: str | None = None,
+        share_transfer_allowed: str | None = None
     ) -> List[Dict[str, Any]]:
         if self.df.empty:
             return []
@@ -127,10 +124,10 @@ class SearchService:
             results_df = results_df[results_df['sector'].str.lower() == sector.lower()]
 
         if valuation is not None:
-            parsed_valuation = self._parse_valuation(valuation)
+            parsed_valuation = self._parse_monetary_value(valuation)
             if parsed_valuation is not None:
-                valuations = results_df['valuation'].apply(self._parse_valuation)
-                results_df = results_df[valuations >= parsed_valuation]
+                valuations_in_df = results_df['valuation'].apply(self._parse_monetary_value)
+                results_df = results_df[valuations_in_df.notna() & (valuations_in_df >= parsed_valuation)]
 
         if website is not None:
             results_df = results_df[results_df['website'].str.contains(website, case=False, na=False)]
@@ -138,9 +135,21 @@ class SearchService:
         if investors is not None:
             results_df = results_df[results_df['investors'].str.contains(investors, case=False, na=False)]
 
-        # Replace any lingering NaN/NaT with None for JSON compatibility
-        results_df = results_df.replace({pd.NaT: None, np.nan: None})
+        # --- NEW FILTER LOGIC ---
+        if total_funding is not None:
+            parsed_funding = self._parse_monetary_value(total_funding)
+            if parsed_funding is not None:
+                fundings_in_df = results_df['total_funding'].apply(self._parse_monetary_value)
+                results_df = results_df[fundings_in_df.notna() & (fundings_in_df >= parsed_funding)]
+        
+        if sinarmas_interest:
+            results_df = results_df[results_df['sinarmas_interest'].str.lower() == sinarmas_interest.lower()]
 
+        if share_transfer_allowed:
+            results_df = results_df[results_df['share_transfer_allowed'].str.lower() == share_transfer_allowed.lower()]
+        # ------------------------
+
+        results_df = results_df.replace({pd.NaT: None, np.nan: None})
         return results_df.to_dict(orient='records')
 
 # Create a single instance to be used across the app
