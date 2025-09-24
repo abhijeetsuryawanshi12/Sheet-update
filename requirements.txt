@@ -1,10 +1,16 @@
 fastapi
 uvicorn[standard]
-gspread
-google-auth-oauthlib
-pandas
-sentence-transformers
-torch
-scikit-learn
-python-dotenv
+pydantic
 pydantic-settings
+gspread
+pandas
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+numpy
+scikit-learn
+google-generativeai
+python-dotenv
+aiofiles
+# --- ADD THIS LINE ---
+chromadb

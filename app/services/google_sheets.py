@@ -17,31 +17,44 @@ class GoogleSheetsClient:
             )
             self.client = gspread.authorize(creds)
         except FileNotFoundError:
-            print(f"Error: Credentials file not found at '{settings.GOOGLE_CREDENTIALS_PATH}'.")
-            print("Please ensure you have set up your Google API credentials.")
+            print(f"--- FATAL ERROR ---: Credentials file not found at '{settings.GOOGLE_CREDENTIALS_PATH}'.")
             self.client = None
         except Exception as e:
-            print(f"An error occurred during Google Sheets authentication: {e}")
+            print(f"--- FATAL ERROR ---: An error occurred during Google Sheets authentication: {e}")
             self.client = None
 
     def get_all_records_as_df(self) -> pd.DataFrame:
         if not self.client:
-            return pd.DataFrame() # Return empty dataframe if client failed to init
+            print("--- DEBUG ---: Google Sheets client is not initialized. Returning empty DataFrame.")
+            return pd.DataFrame()
 
         try:
+            print(f"--- DEBUG ---: Attempting to open Google Sheet: '{settings.GOOGLE_SHEET_NAME}'")
             spreadsheet = self.client.open(settings.GOOGLE_SHEET_NAME)
             worksheet = spreadsheet.worksheet(settings.WORKSHEET_NAME)
             records = worksheet.get_all_records()
-            return pd.DataFrame(records)
+            
+            df = pd.DataFrame(records)
+            # --- CRITICAL DEBUGGING STEP ---
+            print(f"--- DEBUG ---: Successfully fetched data from Google Sheets.")
+            print(f"--- DEBUG ---: DataFrame shape after fetching: {df.shape}")
+            if df.empty:
+                print("--- WARNING ---: The DataFrame is EMPTY. Check if the worksheet has data and correct headers.")
+            else:
+                print("--- DEBUG ---: First 5 rows of raw data:")
+                print(df.head())
+                print("--- DEBUG ---: Column names from sheet:", df.columns.tolist())
+            # --------------------------------
+            return df
+
         except gspread.exceptions.SpreadsheetNotFound:
-            print(f"Error: Spreadsheet '{settings.GOOGLE_SHEET_NAME}' not found.")
+            print(f"--- FATAL ERROR ---: Spreadsheet '{settings.GOOGLE_SHEET_NAME}' not found.")
             return pd.DataFrame()
         except gspread.exceptions.WorksheetNotFound:
-            print(f"Error: Worksheet '{settings.WORKSHEET_NAME}' not found.")
+            print(f"--- FATAL ERROR ---: Worksheet '{settings.WORKSHEET_NAME}' not found.")
             return pd.DataFrame()
         except Exception as e:
-            print(f"An error occurred while fetching data: {e}")
+            print(f"--- FATAL ERROR ---: An error occurred while fetching data: {e}")
             return pd.DataFrame()
 
-# Create a single instance to be used across the app
 sheets_client = GoogleSheetsClient()
