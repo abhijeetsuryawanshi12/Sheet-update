@@ -8,7 +8,7 @@ import Loader from './components/Loader';
 import CompanyModal from './components/CompanyModal'; // New component
 import { AnimatePresence } from 'framer-motion';
 
-const API_URL = 'http://localhost:8000';
+const API_URL =  process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 function App() {
   const [results, setResults] = useState(null);
