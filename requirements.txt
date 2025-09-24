@@ -1,16 +1,10 @@
+# requirements.txt
 fastapi
 uvicorn[standard]
-pydantic
-pydantic-settings
 gspread
 pandas
-google-api-python-client
-google-auth-httplib2
 google-auth-oauthlib
+huggingface-hub
+pydantic-settings
 numpy
-scikit-learn
-google-generativeai
-python-dotenv
-aiofiles
-# --- ADD THIS LINE ---
-chromadb
+pinecone>=3.0.0  # <-- UPDATE THIS LINE
