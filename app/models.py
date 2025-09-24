@@ -18,6 +18,17 @@ class Company(BaseModel):
     liquidity_forge: Optional[str] = None
     liquidity_nasdaq: Optional[str] = None
 
+    # --- New Fields for Company Detail Card ---
+    summary: Optional[str] = None
+    sellers_ask: Optional[str] = None
+    buyers_bid: Optional[str] = None
+    total_bids: Optional[str] = None
+    total_asks: Optional[str] = None
+    highest_bid_price: Optional[str] = None
+    lowest_ask_price: Optional[str] = None
+    price_history: Optional[str] = None  # Expected to be a JSON string from the sheet
+    funding_history: Optional[str] = None # Expected to be a JSON string from the sheet
+
     # This allows creating the model from a pandas row easily
     class Config:
         from_attributes = True

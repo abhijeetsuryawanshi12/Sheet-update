@@ -24,6 +24,7 @@ class SearchService:
             return
 
         self.df.rename(columns={
+            # Existing columns
             "Company": "name",
             "Website": "website",
             "Latest Funding": "latest_funding",
@@ -39,13 +40,32 @@ class SearchService:
             "Liquidity EZ": "liquidity_ez",
             "Liquidity Forge": "liquidity_forge",
             "Liquidity Nasdaq": "liquidity_nasdaq",
+            
+            # --- New Columns (guessed names from Google Sheet) ---
+            "Summary": "summary",
+            "Sellers Ask": "sellers_ask",
+            "Buyers Bid": "buyers_bid",
+            "Total Bids": "total_bids",
+            "Total Asks": "total_asks",
+            "Highest Bid Price": "highest_bid_price",
+            "Lowest Ask Price": "lowest_ask_price",
+            "Price History (JSON)": "price_history",
+            "Funding History (JSON)": "funding_history",
+
         }, inplace=True)
+
+        # Fallback: Use 'overview' for 'summary' if a 'Summary' column doesn't exist
+        if 'summary' not in self.df.columns and 'overview' in self.df.columns:
+            self.df['summary'] = self.df['overview']
 
         expected_cols = [
             'name', 'website', 'latest_funding', 'latest_funding_date', 'total_funding',
             'investors', 'valuation', 'overview', 'sector', 'sinarmas_interest',
             'implied_valuation', 'share_transfer_allowed', 'liquidity_ez',
-            'liquidity_forge', 'liquidity_nasdaq'
+            'liquidity_forge', 'liquidity_nasdaq',
+            # New expected columns
+            'summary', 'sellers_ask', 'buyers_bid', 'total_bids', 'total_asks',
+            'highest_bid_price', 'lowest_ask_price', 'price_history', 'funding_history'
         ]
 
         for col in expected_cols:
