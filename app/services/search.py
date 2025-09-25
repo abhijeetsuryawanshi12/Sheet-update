@@ -59,6 +59,7 @@ class SearchService:
             "Total Bids": "total_bids", "Total Asks": "total_asks", "Highest Bid Price": "highest_bid_price",
             "Lowest Ask Price": "lowest_ask_price", "Price History (JSON)": "price_history",
             "Funding History (JSON)": "funding_history",
+            "Nearing Liquidity Event?": "nearing_liquidity_event",
         }, inplace=True)
 
         if 'summary' not in self.df.columns and 'overview' in self.df.columns:
@@ -67,7 +68,8 @@ class SearchService:
             'name', 'website', 'latest_funding', 'latest_funding_date', 'total_funding', 'investors', 
             'valuation', 'overview', 'sector', 'sinarmas_interest', 'implied_valuation', 'share_transfer_allowed', 
             'liquidity_ez', 'liquidity_forge', 'liquidity_nasdaq', 'summary', 'sellers_ask', 'buyers_bid', 
-            'total_bids', 'total_asks', 'highest_bid_price', 'lowest_ask_price', 'price_history', 'funding_history'
+            'total_bids', 'total_asks', 'highest_bid_price', 'lowest_ask_price', 'price_history', 'funding_history',
+            'nearing_liquidity_event'
         ]
         for col in all_expected_columns:
             if col in self.df.columns:
@@ -75,6 +77,11 @@ class SearchService:
             else:
                 self.df[col] = ''
         
+        # --- SET DEFAULT VALUE FOR THE NEW COLUMN ---
+        # If 'nearing_liquidity_event' is empty after cleaning, set it to 'No'
+        self.df['nearing_liquidity_event'] = self.df['nearing_liquidity_event'].apply(lambda x: 'No' if x.strip() == '' else x)
+        # ---------------------------------------------
+
         self.df['search_text'] = (
             "Company: " + self.df['name'] + ". Sector: " + self.df['sector'] + 
             ". Website: " + self.df['website'] + ". Investors: " + self.df['investors'] +

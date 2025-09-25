@@ -24,6 +24,18 @@ const ShareTag = ({ allowed }) => {
     return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${colorClasses}`}>{allowed}</span>;
 }
 
+// Helper for "Nearing Liquidity Event?"
+const LiquidityEventTag = ({ eventStatus }) => {
+    // Default to 'No' if the prop is falsy (null, undefined, '')
+    const displayStatus = eventStatus || 'No';
+    const lowerStatus = displayStatus.toLowerCase();
+
+    let colorClasses = 'bg-gray-100 text-gray-800'; // Default for 'No'
+    if (lowerStatus === 'yes') colorClasses = 'bg-green-100 text-green-800';
+    
+    return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${colorClasses}`}>{displayStatus}</span>;
+}
+
 
 const ResultsList = ({ companies, onCompanySelect }) => {
   if (companies.length === 0) {
@@ -62,6 +74,7 @@ const ResultsList = ({ companies, onCompanySelect }) => {
               <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Investors</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Sinarmas Interest</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Share Transfer</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Nearing Liquidity Event?</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Website</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Liquidity EZ</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Liquidity Forge</th>
@@ -118,6 +131,10 @@ const ResultsList = ({ companies, onCompanySelect }) => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
                   <ShareTag allowed={company.share_transfer_allowed} />
+                </td>
+
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                  <LiquidityEventTag eventStatus={company.nearing_liquidity_event} />
                 </td>
                 
                 {/* Website */}

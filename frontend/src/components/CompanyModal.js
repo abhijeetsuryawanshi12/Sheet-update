@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { 
   FaTimes, FaBuilding, FaGlobe, FaFileInvoiceDollar, FaChartBar, FaChartLine, FaInfoCircle,
   FaTags, FaHandHoldingUsd, FaArrowUp, FaArrowDown, FaUsers, FaTable, FaBalanceScale,
-  FaHandshake, FaFileSignature, FaWater
+  FaHandshake, FaFileSignature, FaWater, FaFlagCheckered
 } from 'react-icons/fa';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
@@ -66,6 +66,16 @@ const ShareTag = ({ allowed }) => {
     if (lowerAllowed === 'yes') colorClasses = 'bg-green-100 text-green-800';
     else if (lowerAllowed === 'no') colorClasses = 'bg-red-100 text-red-800';
     return <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${colorClasses}`}>{allowed}</span>;
+};
+
+const LiquidityEventTag = ({ eventStatus }) => {
+    const displayStatus = eventStatus || 'No';
+    const lowerStatus = displayStatus.toLowerCase();
+
+    let colorClasses = 'bg-gray-100 text-gray-800'; // Default for 'No'
+    if (lowerStatus === 'yes') colorClasses = 'bg-green-100 text-green-800';
+    
+    return <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${colorClasses}`}>{displayStatus}</span>;
 };
 
 const parseJSON = (jsonString, fallback) => {
@@ -147,6 +157,7 @@ const CompanyModal = ({ company, onClose }) => {
                 <StatCard title="Implied Valuation" value={company.implied_valuation} icon={<FaBalanceScale />} />
                 <StatCard title="Sinarmas Interest" value={<InterestTag interest={company.sinarmas_interest} />} icon={<FaHandshake />} />
                 <StatCard title="Share Transfer" value={<ShareTag allowed={company.share_transfer_allowed} />} icon={<FaFileSignature />} />
+                <StatCard title="Nearing Liquidity Event?" value={<LiquidityEventTag eventStatus={company.nearing_liquidity_event} />} icon={<FaFlagCheckered />} />
             </div>
             <h4 className="font-semibold text-primary-text mt-6 mb-2">Liquidity</h4>
              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

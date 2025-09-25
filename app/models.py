@@ -17,6 +17,7 @@ class Company(BaseModel):
     liquidity_ez: Optional[str] = None
     liquidity_forge: Optional[str] = None
     liquidity_nasdaq: Optional[str] = None
+    nearing_liquidity_event: Optional[str] = None
 
     # --- New Fields for Company Detail Card ---
     summary: Optional[str] = None
