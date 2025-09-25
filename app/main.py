@@ -10,21 +10,20 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# --- Add this CORS middleware section ---
-# This allows your frontend (running on localhost:3000) to communicate with your backend.
-origins = [
-    "http://localhost",
-    "http://localhost:3000", # The default port for React development servers
-    "http://127.0.0.1:3000",
-    "https://*.vercel.app",
-    "https://company-search-ui7v.vercel.app",
-    "https://sandhillmonitor.com",
-    "https://www.sandhillmonitor.com",
-]
-
+# --- CORRECTED CORS MIDDLEWARE SECTION ---
+# This allows your frontend to communicate with your backend.
+# The wildcard pattern for Vercel has been moved to `allow_origin_regex`.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=[
+        "http://localhost",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://company-search-ui7v.vercel.app",
+        "https://sandhillmonitor.com",
+        "https://www.sandhillmonitor.com",
+    ],
+    allow_origin_regex=r"https://.*\.vercel\.app", # Handles domains like `https://....vercel.app`
     allow_credentials=True,
     allow_methods=["*"], # Allows all HTTP methods (GET, POST, etc.)
     allow_headers=["*"], # Allows all headers
