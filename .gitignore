@@ -5,3 +5,4 @@ instance/
 venv
 node_modules/
 credentials.json
+cookies.json
