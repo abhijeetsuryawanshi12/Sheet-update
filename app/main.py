@@ -23,7 +23,7 @@ app.add_middleware(
         "https://sandhillmonitor.com",
         "https://www.sandhillmonitor.com",
     ],
-    allow_origin_regex=r"https://.*\.vercel\.app", # Handles domains like `https://....vercel.app`
+    allow_origin_regex="https://.*\.vercel\.app", # Handles domains like `https://....vercel.app`
     allow_credentials=True,
     allow_methods=["*"], # Allows all HTTP methods (GET, POST, etc.)
     allow_headers=["*"], # Allows all headers
