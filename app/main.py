@@ -18,6 +18,8 @@ origins = [
     "http://127.0.0.1:3000",
     "https://*.vercel.app",
     "https://company-search-ui7v.vercel.app",
+    "https://sandhillmonitor.com",
+    "https://www.sandhillmonitor.com",
 ]
 
 app.add_middleware(
