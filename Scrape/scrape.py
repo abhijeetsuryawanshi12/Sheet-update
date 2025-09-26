@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright, expect
 
 # --- Configuration ---
 COOKIES_FILE_PATH = "cookies.json"
-WEBSITE_URL = "https://marketplace.forgeglobal.com/marketplace/dashboard"
+COMPANY_URL = "https://marketplace.forgeglobal.com/marketplace/companies/replit"
 
 def normalize_cookies(cookies_data):
     """
@@ -52,59 +52,34 @@ def main():
         context.add_cookies(normalized_cookies)
         page = context.new_page()
 
-        print(f"Navigating to protected page: {WEBSITE_URL}...")
-        page.goto(WEBSITE_URL, wait_until="domcontentloaded", timeout=60000)
-
-        print("Verifying login status...")
         try:
-            # Using the div around the user icon for login verification
-            account_button = page.locator('div[data-testid="user-menu"]')
-            expect(account_button).to_be_visible(timeout=20000) # Increased timeout slightly for safety
-            print("✅ Verification successful! Logged in.")
-        except Exception:
-            print("❌ Verification failed! Could not find the account button.")
-            page.screenshot(path="debug_forge_login_failed.png")
-            print("   - Saved a screenshot to 'debug_forge_login_failed.png'")
-            browser.close()
-            return
-
-        try:
-            print("Searching for 'Replit'...")
-            search_input = page.get_by_placeholder("Search for companies")
-            # Use .fill() which is often more reliable for setting input values.
-            search_input.fill("Replit")
-
-            print("Waiting for search results to appear...")
-            # This is the most reliable locator. It finds a link (<a> tag) with the exact accessible name "Replit".
-            search_results = page.get_by_role("link", name="Replit", exact=True)
-            
-            # --- THIS IS THE KEY ADDITION ---
-            # Explicitly wait for the search result to be visible before trying to click it.
-            # This handles any delay from the website's search API.
-            expect(search_results).to_be_visible(timeout=5000)
-            
-            print("Clicking on the 'Replit' search result...")
-            search_results.click()
+            # --- MODIFIED LOGIC ---
+            # 1. Navigate directly to the target page
+            print(f"Navigating directly to company page: {COMPANY_URL}...")
+            page.goto(COMPANY_URL, wait_until="domcontentloaded", timeout=60000)
 
             print("Scraping Forge Price Valuation...")
-            price_chart_container = page.locator('div[data-testid="forge-price-line-chart"]')
-            expect(price_chart_container).to_be_visible(timeout=30000)
 
-            price_text_content = price_chart_container.inner_text()
-            print(f"Found chart block text: \n---\n{price_text_content}\n---")
+            # 2. THE NEW, ACCURATE SELECTOR
+            # First, locate the parent chart container using its stable 'data-testid'.
+            # Then, find the <p> element inside it that contains a "$" sign.
+            # This is highly specific and robust.
+            price_element = page.locator('div[data-testid="forge-price-line-chart"] p:has-text("$")')
 
-            found_price = None
-            lines = price_text_content.split('\n')
-            for i, line in enumerate(lines):
-                if "Forge Price" in line and i + 1 < len(lines):
-                    price_str = lines[i+1]
-                    found_price = price_str.replace('$', '').strip()
-                    break
+            # 3. Wait for the element to be visible. Data might load asynchronously.
+            expect(price_element).to_be_visible(timeout=30000)
+
+            # 4. Extract the text content
+            price_text = price_element.inner_text()
+            print(f"Found raw price text: '{price_text}'")
+
+            # Clean the text to get just the value
+            found_price = price_text.replace('$', '').strip()
             
             if found_price:
                  print(f"✅ Scraped Price: ${found_price}")
             else:
-                 print("❌ Could not parse the price from the chart text.")
+                 print("❌ Could not parse the price from the element.")
 
         except Exception as e:
             print(f"❌ An error occurred during scraping: {e}")
