@@ -23,6 +23,27 @@ class GoogleSheetsClient:
         except Exception as e:
             print(f"--- FATAL ERROR ---: An error occurred during Google Sheets authentication: {e}")
             self.client = None
+    
+    def get_company_list(self) -> list[str]:
+        """
+        Fetches a clean list of company names from the 'Company' column in the Google Sheet.
+
+        Returns:
+            A list of company names as strings. Returns an empty list on failure.
+        """
+        print("--- INFO ---: Fetching company list from Google Sheet...")
+        df = self.get_all_records_as_df()
+        if df.empty or 'Company' not in df.columns:
+            print("--- WARNING ---: DataFrame is empty or 'Company' column not found.")
+            return []
+        
+        # Drop any rows where the company name is missing, and get a unique list
+        companies = df['Company'].dropna().unique().tolist()
+        # Filter out any potential empty strings that might have slipped through
+        companies = [name for name in companies if name]
+
+        print(f"--- INFO ---: Found {len(companies)} companies to process.")
+        return companies
 
     def get_all_records_as_df(self) -> pd.DataFrame:
         if not self.client:
@@ -30,22 +51,20 @@ class GoogleSheetsClient:
             return pd.DataFrame()
 
         try:
-            print(f"--- DEBUG ---: Attempting to open Google Sheet: '{settings.GOOGLE_SHEET_NAME}'")
+            # print(f"--- DEBUG ---: Attempting to open Google Sheet: '{settings.GOOGLE_SHEET_NAME}'")
             spreadsheet = self.client.open(settings.GOOGLE_SHEET_NAME)
             worksheet = spreadsheet.worksheet(settings.WORKSHEET_NAME)
             records = worksheet.get_all_records()
             
             df = pd.DataFrame(records)
-            # --- CRITICAL DEBUGGING STEP ---
-            print(f"--- DEBUG ---: Successfully fetched data from Google Sheets.")
-            print(f"--- DEBUG ---: DataFrame shape after fetching: {df.shape}")
+            # print(f"--- DEBUG ---: Successfully fetched data from Google Sheets.")
+            # print(f"--- DEBUG ---: DataFrame shape after fetching: {df.shape}")
             if df.empty:
                 print("--- WARNING ---: The DataFrame is EMPTY. Check if the worksheet has data and correct headers.")
-            else:
-                print("--- DEBUG ---: First 5 rows of raw data:")
-                print(df.head())
-                print("--- DEBUG ---: Column names from sheet:", df.columns.tolist())
-            # --------------------------------
+            # else:
+                # print("--- DEBUG ---: First 5 rows of raw data:")
+                # print(df.head())
+                # print("--- DEBUG ---: Column names from sheet:", df.columns.tolist())
             return df
 
         except gspread.exceptions.SpreadsheetNotFound:
@@ -59,44 +78,24 @@ class GoogleSheetsClient:
             return pd.DataFrame()
 
     def update_or_add_company_data(self, company_name: str, data: dict) -> bool:
-        """
-        Updates a row for a given company with new data. If the company is not found,
-        it appends a new row. If columns for the new data don't exist, it creates them.
-        Skips any data keys that are not defined in the key_mapping. This process is
-        case-insensitive to the scraped keys.
-
-        Args:
-            company_name: The name of the company to find (must be in the 'Company' column).
-            data: A dictionary where keys are the scraped labels (e.g., 'HIGHEST BID')
-                  and values are the new data points.
-
-        Returns:
-            True if the operation was successful, False otherwise.
-        """
         if not self.client:
             print("--- ERROR ---: Google Sheets client not initialized. Cannot update data.")
             return False
 
         try:
-            print(f"--- INFO ---: Opening Google Sheet '{settings.GOOGLE_SHEET_NAME}' to update data for '{company_name}'.")
+            # print(f"--- INFO ---: Opening Google Sheet '{settings.GOOGLE_SHEET_NAME}' to update data for '{company_name}'.")
             spreadsheet = self.client.open(settings.GOOGLE_SHEET_NAME)
             worksheet = spreadsheet.worksheet(settings.WORKSHEET_NAME)
 
-            # --- UPDATED MAPPING ---
             key_mapping = {
                 # Hiive Fields
-                "Highest Bid": "Highest Bid Price",
-                "Lowest Ask": "Lowest Ask Price",
-                "Hiive Price": "Hiive Price", 
-                "Implied Valuation": "Implied Valuation",
-                "Total Bids": "Total Bids",
-                "Total Asks": "Total Asks",
-                "Sellers Ask": "Sellers Ask",
-                "Buyers Bid": "Buyers Bid",
+                "Highest Bid": "Highest Bid Price", "Lowest Ask": "Lowest Ask Price",
+                "Hiive Price": "Hiive Price", "Implied Valuation": "Implied Valuation",
+                "Total Bids": "Total Bids", "Total Asks": "Total Asks",
+                "Sellers Ask": "Sellers Ask", "Buyers Bid": "Buyers Bid",
                 # EquityZen Fields
-                "Total Bid Volume": "EZ Total Bid Volume",
-                "Total Ask Volume": "EZ Total Ask Volume",
-                # EquityZen Funding Table (New)
+                "Total Bid Volume": "EZ Total Bid Volume", "Total Ask Volume": "EZ Total Ask Volume",
+                # EquityZen Funding Table
                 "Funding History": "Funding History (JSON)",
             }
             
@@ -107,7 +106,7 @@ class GoogleSheetsClient:
                     sheet_header = key_mapping[normalized_key]
                     row_data[sheet_header] = value
 
-            print(f"--- DEBUG ---: Prepared data for sheet: {row_data}")
+            # print(f"--- DEBUG ---: Prepared data for sheet: {row_data}")
             
             headers = worksheet.row_values(1)
             if not headers:
@@ -125,7 +124,7 @@ class GoogleSheetsClient:
                     
                     if header_update_cells:
                         worksheet.update_cells(header_update_cells, value_input_option='USER_ENTERED')
-                        print(f"--- SUCCESS ---: Added {len(new_headers_to_add)} new columns.")
+                        # print(f"--- SUCCESS ---: Added {len(new_headers_to_add)} new columns.")
                         headers = worksheet.row_values(1)
 
             try:
@@ -134,7 +133,7 @@ class GoogleSheetsClient:
                 cell = None
 
             if cell:
-                print(f"--- INFO ---: Found '{company_name}' at row {cell.row}. Preparing update.")
+                # print(f"--- INFO ---: Found '{company_name}' at row {cell.row}. Preparing update.")
                 update_cells_list = []
                 for header, value in row_data.items():
                     if header != "Company" and header in headers:
@@ -148,6 +147,7 @@ class GoogleSheetsClient:
                     print(f"--- INFO ---: No new data to update for '{company_name}'.")
                 return True
             else:
+                # This logic is less likely to be hit now, but is good for new companies
                 print(f"--- INFO ---: Company '{company_name}' not found. Appending a new row.")
                 new_row = [row_data.get(header, "") for header in headers]
                 worksheet.append_row(new_row, value_input_option='USER_ENTERED')
@@ -155,7 +155,7 @@ class GoogleSheetsClient:
                 return True
 
         except Exception as e:
-            print(f"--- FATAL ERROR ---: An error occurred while updating the sheet: {e}")
+            print(f"--- FATAL ERROR ---: An error occurred while updating the sheet for '{company_name}': {e}")
             traceback.print_exc()
             return False
 
