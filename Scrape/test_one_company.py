@@ -32,17 +32,31 @@ def normalize_cookies(cookies_data):
 async def scrape_company_data(page, company_name):
     """Searches for a company, navigates to its page, and scrapes its profile and funding data."""
     scraped_data = {}
+    overview_section_locator = page.locator('div[class*="SvaSingleCompanyAboutCompanyTab--section"]').first
 
     # --- STAGE 1: Search and Navigate ---
     try:
-        print(f"🚀 Navigating to EquityZen to search for '{company_name}'...")
-        await page.goto("https://equityzen.com/company/", wait_until="domcontentloaded", timeout=45000)
+        # Start at the required /welcome page.
+        print(f"🚀 Navigating to the '/welcome' page as the starting point...")
+        await page.goto("https://equityzen.com/welcome/", wait_until="domcontentloaded", timeout=45000)
 
-        search_input_selector = 'input#NavigationBarGlobSearch'
-        await expect(page.locator(search_input_selector)).to_be_visible(timeout=15000)
+        # Click the 'Investments' link to navigate to the page with the search bar.
+        print("   - Clicking 'Investments' link to access the main search functionality...")
+        investments_link = page.get_by_role("link", name="Investments", exact=True)
+        await expect(investments_link).to_be_visible(timeout=15000)
+        await investments_link.click()
+
+        time.sleep(3)
+        
+        # Now that we are on the correct page, find and use the search bar.
+        print("   - Waiting for the investments page and search bar to load...")
+        search_input = page.get_by_placeholder("Search")
+        await expect(search_input).to_be_visible(timeout=15000)
 
         print(f"   - Typing '{company_name}' into the search bar.")
-        await page.locator(search_input_selector).type(company_name, delay=100)
+        await search_input.press_sequentially(company_name, delay=random.randint(50, 150))
+
+        time.sleep(3)
 
         first_result_selector = 'div[class*="SearchDropdown-item"]'
         await expect(page.locator(first_result_selector).first).to_be_visible(timeout=10000)
@@ -50,7 +64,8 @@ async def scrape_company_data(page, company_name):
         print("   - Search results found. Clicking the first one.")
         await page.locator(first_result_selector).first.click()
 
-        await page.wait_for_load_state('networkidle', timeout=30000)
+        print("   - Waiting for company page to load...")
+        await expect(overview_section_locator).to_be_visible(timeout=30000)
         print(f"   - Successfully navigated to {company_name}'s page.")
 
     except Exception as e:
@@ -62,7 +77,7 @@ async def scrape_company_data(page, company_name):
         try:
             await page.locator('button:has-text("Confirm")').click(timeout=5000)
             print("   - ✅ 'Confirm' button clicked.")
-            await page.wait_for_load_state('networkidle', timeout=10000)
+            await expect(overview_section_locator).to_be_visible(timeout=10000)
         except Exception:
             pass # Popup might not be there, which is fine
 
@@ -70,8 +85,7 @@ async def scrape_company_data(page, company_name):
         print("🚀 Scraping 'About' tab data...")
         # Scrape Overview
         try:
-            overview_locator = page.locator('div[class*="SvaSingleCompanyAboutCompanyTab--section"] div[class*="--description"]').first
-            overview_text = await overview_locator.inner_text(timeout=10000)
+            overview_text = await overview_section_locator.locator('div[class*="--description"]').inner_text(timeout=10000)
             scraped_data['Overview'] = overview_text.strip()
             print("   - Overview scraped.")
         except Exception:
@@ -107,18 +121,17 @@ async def scrape_company_data(page, company_name):
         try:
             print("🚀 Navigating to 'Cap Table' tab...")
             await page.locator('div[role="tab"]:has-text("Cap Table")').click(timeout=10000)
-            # Wait for either of the possible table containers to appear
             await page.wait_for_selector("div.CompanyCapTable, div.CompanyCapTable-funding-history-container", timeout=20000)
         except Exception as e:
             print(f"   - ❌ Could not find or click 'Cap Table' tab. Skipping funding history. Error: {e}")
-            return scraped_data # Return whatever was scraped from the About tab
+            return scraped_data
 
         funding_scraped = False
-        # Attempt 1: Modern Ant Design Table (with dynamic headers)
+        # Attempt 1: Modern Ant Design Table
         try:
             table_container = page.locator("div.CompanyCapTable").first
             row_locators = table_container.locator("tbody > tr.ant-table-row")
-            if await row_locators.count() > 0:
+            if await row_locators.count(timeout=5000) > 0:
                 all_th = table_container.locator("thead th.ant-table-cell")
                 headers = [text.strip() for text in await all_th.all_inner_texts() if text.strip()]
                 all_rows_data = []
@@ -144,7 +157,7 @@ async def scrape_company_data(page, company_name):
             try:
                 simple_table = page.locator("div.CompanyCapTable-funding-history-container table").first
                 rows = simple_table.locator("tbody > tr.ant-table-row")
-                if await rows.count() > 0:
+                if await rows.count(timeout=5000) > 0:
                     all_rows_data = []
                     headers = ["Date", "Price per Share"]
                     for i in range(await rows.count()):
@@ -167,16 +180,11 @@ async def scrape_company_data(page, company_name):
         print(f"❌ An error occurred while scraping data for {company_name}: {e}")
         slug_for_error = re.sub(r'[^a-z0-9]+', '-', company_name.lower())
         await page.screenshot(path=f"error_{slug_for_error}.png")
-        return scraped_data # Return any partial data collected before the error
+        return scraped_data
 
 async def main():
     gs_client = GoogleSheetsClient()
     db_client = DatabaseClient()
-    companies_to_scrape = gs_client.get_company_list()
-
-    if not companies_to_scrape:
-        print("❌ No companies found in the Google Sheet. Exiting.")
-        return
 
     try:
         with open(COOKIES_FILE_PATH, 'r') as f:
@@ -191,30 +199,23 @@ async def main():
         await context.add_cookies(cookies)
         page = await context.new_page()
 
-        start_index = 34 # Can be adjusted to skip companies
-        companies_to_process = companies_to_scrape[start_index:]
+        company_to_scrape = "Lambda"
 
-        for i, company_name in enumerate(companies_to_process):
-            original_index = i + start_index
-            print("-" * 50)
-            print(f"Processing company {i+1}/{len(companies_to_process)}: {company_name} (Row {original_index + 2})")
+        print("-" * 50)
+        print(f"Processing single company: {company_to_scrape}")
 
-            all_data = await scrape_company_data(page, company_name)
-            
-            if all_data:
-                print(f"   - ✅ Scraping successful for {company_name}. Updating stores...")
-                db_client.update_scraped_data(company_name=company_name, data=all_data)
-                gs_client.update_or_add_company_data(company_name=company_name, data=all_data)
-            else:
-                print(f"   - ❌ No data scraped for {company_name}. Not updating stores.")
-
-            sleep_duration = random.uniform(5, 12)
-            print(f"--- Pausing for {sleep_duration:.2f} seconds before next company ---")
-            time.sleep(sleep_duration)
-
+        all_data = await scrape_company_data(page, company_to_scrape)
+        
+        if all_data:
+            print(f"   - ✅ Scraping successful for {company_to_scrape}. Updating stores...")
+            db_client.update_scraped_data(company_name=company_to_scrape, data=all_data)
+            gs_client.update_or_add_company_data(company_name=company_to_scrape, data=all_data)
+        else:
+            print(f"   - ❌ No data scraped for {company_to_scrape}. Not updating stores.")
+        
         await browser.close()
         db_client.close()
-        print("\n✅ All companies processed.")
+        print("\n✅ Script finished.")
 
 if __name__ == "__main__":
     asyncio.run(main())

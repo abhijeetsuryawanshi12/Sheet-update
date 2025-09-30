@@ -78,84 +78,66 @@ class GoogleSheetsClient:
             return pd.DataFrame()
 
     def update_or_add_company_data(self, company_name: str, data: dict) -> bool:
-        if not self.client:
-            print("--- ERROR ---: Google Sheets client not initialized. Cannot update data.")
-            return False
-
+        if not self.client: return False
         try:
-            # print(f"--- INFO ---: Opening Google Sheet '{settings.GOOGLE_SHEET_NAME}' to update data for '{company_name}'.")
             spreadsheet = self.client.open(settings.GOOGLE_SHEET_NAME)
             worksheet = spreadsheet.worksheet(settings.WORKSHEET_NAME)
 
             key_mapping = {
-                # Hiive Fields
-                "Highest Bid": "Highest Bid Price", "Lowest Ask": "Lowest Ask Price",
-                "Hiive Price": "Hiive Price", "Implied Valuation": "Implied Valuation",
-                "Total Bids": "Total Bids", "Total Asks": "Total Asks",
-                "Sellers Ask": "Sellers Ask", "Buyers Bid": "Buyers Bid",
-                # EquityZen Fields
-                "Total Bid Volume": "EZ Total Bid Volume", "Total Ask Volume": "EZ Total Ask Volume",
-                # EquityZen Funding Table
-                "Funding History": "Funding History (JSON)",
+                'Investors': 'Investors', 'Overview': 'Overview',
+                'Highest Qualified Bid': 'Highest Bid Price', 'Total Bid Volume': 'EZ Total Bid Volume',
+                'Total Ask Volume': 'EZ Total Ask Volume', 'Funding History': 'Funding History (JSON)'
             }
             
             row_data = {"Company": company_name}
             for scraped_key, value in data.items():
-                normalized_key = scraped_key.title()
+                # Normalize key by removing "Qualified " and title-casing
+                normalized_key = scraped_key.title().replace("Qualified ", "")
                 if normalized_key in key_mapping:
                     sheet_header = key_mapping[normalized_key]
                     row_data[sheet_header] = value
 
-            # print(f"--- DEBUG ---: Prepared data for sheet: {row_data}")
-            
             headers = worksheet.row_values(1)
-            if not headers:
-                print("--- INFO ---: Worksheet is empty. Creating headers from scratch.")
+            if not headers: # Handle empty sheet
                 headers = list(row_data.keys())
-                worksheet.update('A1', [headers], value_input_option='USER_ENTERED')
-            else:
-                new_headers_to_add = [h for h in row_data.keys() if h not in headers]
-                if new_headers_to_add:
-                    print(f"--- INFO ---: Adding new columns to the sheet: {new_headers_to_add}")
-                    start_col_index = len(headers) + 1
-                    header_update_cells = []
-                    for i, header_name in enumerate(new_headers_to_add):
-                        header_update_cells.append(gspread.Cell(row=1, col=start_col_index + i, value=header_name))
-                    
-                    if header_update_cells:
-                        worksheet.update_cells(header_update_cells, value_input_option='USER_ENTERED')
-                        # print(f"--- SUCCESS ---: Added {len(new_headers_to_add)} new columns.")
-                        headers = worksheet.row_values(1)
+                worksheet.update('A1', [headers])
 
+            # Logic for conditional updates
             try:
                 cell = worksheet.find(company_name, in_column=1)
-            except gspread.exceptions.CellNotFound:
-                cell = None
+                existing_row_values = worksheet.row_values(cell.row)
+                existing_row_dict = dict(zip(headers, existing_row_values))
 
-            if cell:
-                # print(f"--- INFO ---: Found '{company_name}' at row {cell.row}. Preparing update.")
+                # Check Investors: if sheet has data, remove from update
+                if existing_row_dict.get('Investors', '').strip() and 'Investors' in row_data:
+                    del row_data['Investors']
+                
+                # Check Overview: if sheet has data, remove from update
+                if existing_row_dict.get('Overview', '').strip() and 'Overview' in row_data:
+                    del row_data['Overview']
+
+                # Now `row_data` only contains fields that should be updated
                 update_cells_list = []
                 for header, value in row_data.items():
-                    if header != "Company" and header in headers:
+                    if header in headers and header != "Company":
                         col_index = headers.index(header) + 1
                         update_cells_list.append(gspread.Cell(cell.row, col_index, str(value)))
                 
                 if update_cells_list:
                     worksheet.update_cells(update_cells_list, value_input_option='USER_ENTERED')
-                    print(f"--- SUCCESS ---: Successfully updated {len(update_cells_list)} cells for '{company_name}'.")
-                else:
-                    print(f"--- INFO ---: No new data to update for '{company_name}'.")
+                    print(f"   - Sheet: Updated {len(update_cells_list)} cells for {company_name}.")
+                
                 return True
-            else:
-                # This logic is less likely to be hit now, but is good for new companies
-                print(f"--- INFO ---: Company '{company_name}' not found. Appending a new row.")
+
+            except gspread.exceptions.CellNotFound:
+                # Company not found, so append a new row with all data
+                print(f"   - Sheet: Company '{company_name}' not found. Appending new row.")
                 new_row = [row_data.get(header, "") for header in headers]
                 worksheet.append_row(new_row, value_input_option='USER_ENTERED')
-                print(f"--- SUCCESS ---: Successfully added a new row for '{company_name}'.")
                 return True
 
         except Exception as e:
-            print(f"--- FATAL ERROR ---: An error occurred while updating the sheet for '{company_name}': {e}")
+            print(f"--- FATAL ERROR ---: Sheet update failed for '{company_name}': {e}")
             traceback.print_exc()
             return False
 

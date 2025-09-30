@@ -8,3 +8,4 @@ huggingface-hub
 pydantic-settings
 numpy
 pinecone>=3.0.0  # <-- UPDATE THIS LINE
+psycopg2-binary
