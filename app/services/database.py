@@ -150,9 +150,8 @@ class DatabaseClient:
             'Total Ask Volume': 'ez_total_ask_volume',
             'Funding History': 'funding_history',
             # Additional mappings for other market activity fields
-            'Last 30D Transaction': 'last_30d_transaction',
-            'EquityZen Reference Price': 'equityzen_reference_price',
-            'Market Score': 'market_score'
+            'EquityZen Reference Price': 'ez_reference_price',
+
         }
         
         unconditional_data = {}
@@ -203,6 +202,32 @@ class DatabaseClient:
                         self.conn.rollback()
             
             self.conn.commit()
+    
+    # In your app/services/database.py file, inside the DatabaseClient class:
+
+    # In your app/services/database.py file, inside the DatabaseClient class:
+
+    def get_all_company_names(self):
+        """
+        Fetches a list of all unique company names from the database.
+        This method creates a temporary cursor to execute the query.
+        """
+        # --- IMPORTANT ---
+        # 1. Replace 'your_table_name' with the actual name of your table.
+        # 2. If your connection object is not named `self.conn`, change it below (e.g., to `self.connection`).
+        query = "SELECT DISTINCT name FROM companies"
+        
+        try:
+            # Create a new cursor using the connection object
+            with self.conn.cursor() as cursor:
+                cursor.execute(query)
+                # The result is a list of tuples, e.g., [('Company A',), ('Company B',)]
+                # We extract the first element from each tuple to create a simple list.
+                results = [item[0] for item in cursor.fetchall()]
+                return results
+        except Exception as e:
+            print(f"Error fetching company names from database: {e}")
+            return [] # Return an empty list on failure
 
     def close(self):
         if self.conn:

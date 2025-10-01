@@ -29,19 +29,12 @@ def normalize_cookies(cookies_data):
         normalized_cookies.append(new_cookie)
     return normalized_cookies
 
-def create_url_slug(company_name: str) -> str:
-    """
-    Converts a company name like 'Cohesity, Inc.' to 'cohesity' or 'Digital Ocean' to 'digitalocean'.
-    """
-    clean_name = re.sub(r'[,.]?\s*(inc|llc|ltd|corp|corporation|com)\.?$', '', company_name, flags=re.IGNORECASE)
-    clean_name = re.sub(r'[.,]', '', clean_name)
-    slug = clean_name.strip().lower().replace(' ', '')
-    return slug
-
-async def scrape_company_data(page, company_name, company_slug, db_client):
+async def scrape_company_data(page, company_name, company_url, db_client):
     """Scrapes Overview, Investors, Market Activity, and Funding data for a single company."""
-    about_url = f"https://equityzen.com/company/{company_slug}/"
-    funding_url = f"{about_url}?tab=cap-table"
+    # --- UPDATED: Use the provided URL directly ---
+    base_url = company_url.rstrip('/')
+    about_url = base_url
+    funding_url = f"{base_url}/?tab=cap-table"
     scraped_data = {}
 
     try:
@@ -49,8 +42,7 @@ async def scrape_company_data(page, company_name, company_slug, db_client):
         print(f"🚀 Navigating to {company_name}'s 'About' page...")
         await page.goto(about_url, wait_until="domcontentloaded", timeout=45000)
 
-        time.sleep(10)
-
+        time.sleep(3)
         # Check if page exists
         page_title = await page.title()
         if "Sorry, we couldn't find that page" in page_title or "EquityZen | Invest in Private Companies" in page_title:
@@ -167,7 +159,6 @@ async def scrape_company_data(page, company_name, company_slug, db_client):
         await page.goto(funding_url, wait_until="domcontentloaded", timeout=45000)
         await page.wait_for_timeout(5000)  # Wait for dynamic content
 
-        time.sleep(10)
 
         funding_scraped = False
 
@@ -273,6 +264,8 @@ async def scrape_company_data(page, company_name, company_slug, db_client):
     except Exception as e:
         print(f"❌ An error occurred while scraping {company_name}: {str(e)}")
         try:
+            # Create a slug from the URL for the screenshot filename
+            company_slug = base_url.split('/')[-1]
             await page.screenshot(path=f"error_{company_slug}.png")
             print(f"   - 📸 Screenshot saved as error_{company_slug}.png")
         except:
@@ -283,10 +276,137 @@ async def scrape_company_data(page, company_name, company_slug, db_client):
 async def main():
     gs_client = GoogleSheetsClient()
     db_client = DatabaseClient()
-    companies_to_scrape = gs_client.get_company_list()
+    
+    # --- NEW: Define companies and their URLs in this dictionary ---
+    # INSTRUCTION: Add company names as keys and their full EquityZen URLs as values.
+    # The script will iterate through this dictionary.
+    COMPANIES_TO_SCRAPE = {
+        '6sense': "https://equityzen.com/company/6sense/",
+        'Abnormal AI': "https://equityzen.com/company/abnormalsecurity/",
+        'Abridge': "https://equityzen.com/company/abridged1a4/",
+        'Airtable': "https://equityzen.com/company/airtable/",
+        'Alchemy Insights': "https://equityzen.com/company/alchemyinsights/",
+        'Aledade Inc.': "https://equityzen.com/company/aledade/",
+        'Algolia': "https://equityzen.com/company/algolia/",
+        'AlphaSense': "https://equityzen.com/company/alphasense/",
+        'Altruist': "https://equityzen.com/company/altruistcorp/",
+        'Ambience Healthcare': "https://equityzen.com/company/ambiencehealthcare/",
+        'Anaconda': "https://equityzen.com/company/continuumanalytics/",
+        'Anysphere, Inc.': "https://equityzen.com/company/anysphere/",
+        'Apptronik': "https://equityzen.com/company/apptronik/",
+        'Arctic Wolf': "https://equityzen.com/company/arcticwolfnetworks/",
+        'Aviatrix': "https://equityzen.com/company/aviatrix/",
+        'Aviatrix Systems': "https://equityzen.com/company/aviatrixsystems/",
+        'Benchling': "https://equityzen.com/company/benchling/",
+        'Bitwise': "https://equityzen.com/company/bitwiseassetmanagement/",
+        'Boxabl': "https://equityzen.com/company/boxabl/",
+        'Celestial AI': "https://equityzen.com/company/inorganicintelligence/",
+        'Cerebras Systems': "https://equityzen.com/company/cerebrassystems/",
+        'Chainalysis': "https://equityzen.com/company/chainalysis123/",
+        'Chronosphere': "https://equityzen.com/company/chronosphere/",
+        'Cityblock Health': "https://equityzen.com/company/cityblockhealth/",
+        'ClickHouse': "https://equityzen.com/company/clickhouse/",
+        'Cockroach Labs': "https://equityzen.com/company/cockroachlabs/",
+        'Cognition AI': "https://equityzen.com/company/cognition5bd7/",
+        'Cohere': "https://equityzen.com/company/cohere82b8/",
+        'Cohesity, Inc.': "https://equityzen.com/company/cohesity/",
+        'Colossal': "https://equityzen.com/company/colossalbiosciences/",
+        'Commonwealth Fusion Systems': "https://equityzen.com/company/commonwealthfusionsystems/",     
+        'Consensys': "https://equityzen.com/company/consensussystems/",
+        'Cribl': "https://equityzen.com/company/cribl/",
+        'Crunchbase': "https://equityzen.com/company/crunchbase/",
+        'Crusoe ': "https://equityzen.com/company/crusoe/",
+        'Crusoe Energy': "https://equityzen.com/company/crusoeenergy/",
+        'Crusoe Energy Systems': "https://equityzen.com/company/crusoeenergysystems/",
+        'DataRobot': "https://equityzen.com/company/datarobot/",
+        'Databricks': "https://equityzen.com/company/databricks/",
+        'Decart': "https://equityzen.com/company/decartabcd/",
+        'Deel': "https://equityzen.com/company/deel/",
+        'Devo': "https://equityzen.com/company/logtrustsl/",
+        'Discord': "https://equityzen.com/company/discord/",
+        'DispatchHealth': "https://equityzen.com/company/dispatchhealth/",
+        'Drata': "https://equityzen.com/company/drata/",
+        'Dura Software': "https://equityzen.com/company/durasoftware/",
+        'Eight Sleep': "https://equityzen.com/company/morphy/",
+        'Eightfold AI': "https://equityzen.com/company/eightfold/",
+        'ElevenLabs': "https://equityzen.com/company/elevenlabs/",
+        'EliseAI': "https://equityzen.com/company/meetelise/",
+        'Eon': "https://equityzen.com/company/eone96e/",
+        'Epic Games': "https://equityzen.com/company/epicgames234/",
+        'Epic Games Inc.': "https://equityzen.com/company/epicgames/",
+        'Events.com': "https://equityzen.com/company/eventscom/",
+        'Evidation Health': "https://equityzen.com/company/evidationhealth/",
+        'Fever': "https://equityzen.com/company/fever/",
+        'FigureAI': "https://equityzen.com/company/figureb5dc/",
+        'Fivetran': "https://equityzen.com/company/fivetran/",
+        'Flock Safety': "https://equityzen.com/company/flocksafety/",
+        'Gecko Robotics': "https://equityzen.com/company/geckorobotics/",
+        'Glean': "https://equityzen.com/company/sciotechnologies/",
+        'Gusto': "https://equityzen.com/company/gusto/",
+        'Helion Energy': "https://equityzen.com/company/helionenergy/",
+        'Helsing': "https://equityzen.com/company/helsing/",
+        'Hippocratic AI': "https://equityzen.com/company/hippocraticai/",
+        'Huntress': "https://equityzen.com/company/huntress/",
+        'Icertis': "https://equityzen.com/company/icertis/",
+        'Illumio': "https://equityzen.com/company/illumio/",
+        'Invisible Technologies': "https://equityzen.com/company/invisibletechnologies/",
+        'Kalshi': "https://equityzen.com/company/kalshi/",
+        'Kard': "https://equityzen.com/company/kard/",
+        'Kraken': "https://equityzen.com/company/kraken/",
+        'Lambda': "https://equityzen.com/company/lambdalabs/",
+        'LeoLabs': "https://equityzen.com/company/leolabs/",
+        'Lightmatter': "https://equityzen.com/company/lightmatterinc/",
+        'Magic': "https://equityzen.com/company/magicleap/",
+        'Maven': "https://equityzen.com/company/mavenlink/",
+        'Medable': "https://equityzen.com/company/medableinc/",
+        'Meesho': "https://equityzen.com/company/meesho/",
+        'Megvii': "https://equityzen.com/company/megvii/",
+        'Meter': "https://equityzen.com/company/meter5c65/",
+        'MinIO': "https://equityzen.com/company/minioinc/",
+        'Motive Technologies': "https://equityzen.com/company/motive/",
+        'Neo4J': "https://equityzen.com/company/neotechnology/",
+        'Neuralink': "https://equityzen.com/company/neuralink/",
+        'Niantic, Inc.': "https://equityzen.com/company/nianticlabsgoogle/",
+        'Nova Labs  (Helium)': "https://equityzen.com/company/novalabs(helium)/",
+        'Nova Labs (Helium)': "https://equityzen.com/company/novalabs(helium)/",
+        'Nuro': "https://equityzen.com/company/nuro2/",
+        'OpenAI': "https://equityzen.com/company/openai/",
+        'OpenEvidence': "https://equityzen.com/company/openevidence/",
+        'Orum': "https://equityzen.com/company/orum/",
+        'Persefoni AI Inc.': "https://equityzen.com/company/persefoni/",
+        'Polymarket': "https://equityzen.com/company/polymarket/",
+        'Postman': "https://equityzen.com/company/postman/",
+        'PurpleLab': "https://equityzen.com/company/purplelab/",
+        'Quantum Machines': "https://equityzen.com/company/quantummachines/",
+        'Reflection AI': "https://equityzen.com/company/reflectionai/",
+        'Reify Health': "https://equityzen.com/company/reifyhealth/",
+        'Reka AI': "https://equityzen.com/company/rekaai/",
+        'Relativity Space': "https://equityzen.com/company/relativityspace/",
+        'Remote Technology': "https://equityzen.com/company/remoted596/",
+        'Replit': "https://equityzen.com/company/replit/",
+        'Ripple Labs Inc.': "https://equityzen.com/company/ripplelabs/",
+        'SambaNova Systems': "https://equityzen.com/company/sambanovasystems/",
+        'SandboxAQ': "https://equityzen.com/company/sandboxaq/",
+        'Shield AI': "https://equityzen.com/company/shieldai/",
+        'Sierra Space': "https://equityzen.com/company/sierraspace/",
+        'Sila Nanotechnologies': "https://equityzen.com/company/silananotechnologies/",
+        'Skydio': "https://equityzen.com/company/skydio/",
+        'Snorkel AI': "https://equityzen.com/company/snorkelai/",
+        'SpaceX': "https://equityzen.com/company/spacex/",
+        'StartEngine': "https://equityzen.com/company/startengine/",
+        'StockX': "https://equityzen.com/company/stockx/",
+        'Talkdesk': "https://equityzen.com/company/talkdesk/",
+        'Tanium': "https://equityzen.com/company/tanium/",
+        'Teleport': "https://equityzen.com/company/gravitational/",
+        'Thinking Machines Lab': "https://equityzen.com/company/thinkingmachineslab/",
+        'Together AI': "https://equityzen.com/company/together1a7e/",
+        'Vercel': "https://equityzen.com/company/vercel/",
+        'Xanadu': "https://equityzen.com/company/xanadu2/",
+        'Zipline': "https://equityzen.com/company/romotive/",
+    }
 
-    if not companies_to_scrape:
-        print("❌ No companies found in the Google Sheet. Exiting.")
+    if not COMPANIES_TO_SCRAPE:
+        print("❌ The COMPANIES_TO_SCRAPE dictionary is empty. Please add companies and their URLs to the script. Exiting.")
         return
 
     try:
@@ -304,16 +424,17 @@ async def main():
         await context.add_cookies(cookies)
         page = await context.new_page()
 
-        start_index = 40
-        companies_to_process = companies_to_scrape[start_index:]
+        start_index = 0  # Adjust this to start from a specific company in the list
+        # Convert dict items to a list to allow slicing
+        companies_to_process = list(COMPANIES_TO_SCRAPE.items())[start_index:]
 
-        for i, company_name in enumerate(companies_to_process):
+        for i, (company_name, company_url) in enumerate(companies_to_process):
             original_index = i + start_index
             print("-" * 50)
             print(f"Processing company {i+1}/{len(companies_to_process)} (#{original_index}): {company_name}")
-
-            company_slug = create_url_slug(company_name)
-            all_data = await scrape_company_data(page, company_name, company_slug, db_client)
+            print(f"   - URL: {company_url}")
+            
+            all_data = await scrape_company_data(page, company_name, company_url, db_client)
             
             if all_data:
                 print(f"   - ✅ Scraping successful for {company_name}. Updating stores...")
