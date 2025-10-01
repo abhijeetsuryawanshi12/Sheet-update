@@ -51,20 +51,13 @@ class GoogleSheetsClient:
             return pd.DataFrame()
 
         try:
-            # print(f"--- DEBUG ---: Attempting to open Google Sheet: '{settings.GOOGLE_SHEET_NAME}'")
             spreadsheet = self.client.open(settings.GOOGLE_SHEET_NAME)
             worksheet = spreadsheet.worksheet(settings.WORKSHEET_NAME)
             records = worksheet.get_all_records()
             
             df = pd.DataFrame(records)
-            # print(f"--- DEBUG ---: Successfully fetched data from Google Sheets.")
-            # print(f"--- DEBUG ---: DataFrame shape after fetching: {df.shape}")
             if df.empty:
                 print("--- WARNING ---: The DataFrame is EMPTY. Check if the worksheet has data and correct headers.")
-            # else:
-                # print("--- DEBUG ---: First 5 rows of raw data:")
-                # print(df.head())
-                # print("--- DEBUG ---: Column names from sheet:", df.columns.tolist())
             return df
 
         except gspread.exceptions.SpreadsheetNotFound:
@@ -78,24 +71,43 @@ class GoogleSheetsClient:
             return pd.DataFrame()
 
     def update_or_add_company_data(self, company_name: str, data: dict) -> bool:
-        if not self.client: return False
+        """
+        Updates or adds company data to Google Sheets with conditional logic.
+        - Investors/Overview are only updated if they are currently empty.
+        - Other fields are updated unconditionally.
+        """
+        if not self.client: 
+            return False
+        
         try:
             spreadsheet = self.client.open(settings.GOOGLE_SHEET_NAME)
             worksheet = spreadsheet.worksheet(settings.WORKSHEET_NAME)
 
+            # Map scraped keys to sheet headers
             key_mapping = {
-                'Investors': 'Investors', 'Overview': 'Overview',
-                'Highest Qualified Bid': 'Highest Bid Price', 'Total Bid Volume': 'EZ Total Bid Volume',
-                'Total Ask Volume': 'EZ Total Ask Volume', 'Funding History': 'Funding History (JSON)'
+                'Overview': 'Overview (Product, Model & Moat)',
+                'Investors': 'Investors',
+                'Highest Qualified Bid': 'Highest Bid Price',
+                'Total Bid Volume': 'EZ Total Bid Volume',
+                'Total Ask Volume': 'EZ Total Ask Volume',
+                'Funding History': 'Funding History (JSON)',
+                'Last 30D Transaction': 'Last 30D Transaction',
+                'EquityZen Reference Price': 'EquityZen Reference Price',
+                'Market Score': 'Market Score'
             }
             
             row_data = {"Company": company_name}
             for scraped_key, value in data.items():
-                # Normalize key by removing "Qualified " and title-casing
-                normalized_key = scraped_key.title().replace("Qualified ", "")
-                if normalized_key in key_mapping:
-                    sheet_header = key_mapping[normalized_key]
+                # Try direct mapping first
+                if scraped_key in key_mapping:
+                    sheet_header = key_mapping[scraped_key]
                     row_data[sheet_header] = value
+                else:
+                    # Try normalized key
+                    normalized_key = scraped_key.title().replace("Qualified ", "")
+                    if normalized_key in key_mapping:
+                        sheet_header = key_mapping[normalized_key]
+                        row_data[sheet_header] = value
 
             headers = worksheet.row_values(1)
             if not headers: # Handle empty sheet
@@ -108,13 +120,16 @@ class GoogleSheetsClient:
                 existing_row_values = worksheet.row_values(cell.row)
                 existing_row_dict = dict(zip(headers, existing_row_values))
 
-                # Check Investors: if sheet has data, remove from update
-                if existing_row_dict.get('Investors', '').strip() and 'Investors' in row_data:
-                    del row_data['Investors']
+                # Conditional fields that should only update if empty
+                conditional_fields = ['Investors', 'Overview (Product, Model & Moat)']
                 
-                # Check Overview: if sheet has data, remove from update
-                if existing_row_dict.get('Overview', '').strip() and 'Overview' in row_data:
-                    del row_data['Overview']
+                for field in conditional_fields:
+                    if field in row_data:
+                        existing_value = existing_row_dict.get(field, '').strip()
+                        if existing_value:
+                            # Field already has data, remove from update
+                            print(f"   - Sheet: '{field}' already has data for {company_name}, skipping.")
+                            del row_data[field]
 
                 # Now `row_data` only contains fields that should be updated
                 update_cells_list = []
@@ -125,7 +140,9 @@ class GoogleSheetsClient:
                 
                 if update_cells_list:
                     worksheet.update_cells(update_cells_list, value_input_option='USER_ENTERED')
-                    print(f"   - Sheet: Updated {len(update_cells_list)} cells for {company_name}.")
+                    print(f"   - Sheet: Updated {len(update_cells_list)} cell(s) for {company_name}.")
+                else:
+                    print(f"   - Sheet: No cells to update for {company_name}.")
                 
                 return True
 

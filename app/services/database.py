@@ -2,7 +2,7 @@
 import psycopg2
 import pandas as pd
 from app.config import settings
-import json # Import the json library
+import json
 
 class DatabaseClient:
     def __init__(self):
@@ -12,6 +12,51 @@ class DatabaseClient:
             print("✅ Successfully connected to the database.")
         except Exception as e:
             print(f"❌ Could not connect to the database: {e}")
+
+    def get_field_value(self, company_name: str, field_name: str):
+        """
+        Retrieves the value of a specific field for a given company.
+        
+        Args:
+            company_name: The name of the company
+            field_name: The database column name (e.g., 'overview', 'investors')
+        
+        Returns:
+            The field value if found, None otherwise
+        """
+        if not self.conn:
+            return None
+        
+        try:
+            with self.conn.cursor() as cur:
+                # Use parameterized query to prevent SQL injection
+                # Note: We can't use %s for column names, so we validate the field_name
+                allowed_fields = [
+                    'name', 'website', 'latest_funding', 'latest_funding_date', 
+                    'total_funding', 'investors', 'valuation', 'overview', 'sector',
+                    'sinarmas_interest', 'implied_valuation', 'share_transfer_allowed',
+                    'liquidity_ez', 'liquidity_forge', 'liquidity_nasdaq', 'summary',
+                    'sellers_ask', 'buyers_bid', 'total_bids', 'total_asks',
+                    'highest_bid_price', 'lowest_ask_price', 'price_history',
+                    'funding_history', 'hiive_price', 'ez_total_bid_volume', 
+                    'ez_total_ask_volume'
+                ]
+                
+                if field_name not in allowed_fields:
+                    print(f"⚠️ Invalid field name: {field_name}")
+                    return None
+                
+                sql = f"SELECT {field_name} FROM companies WHERE name = %s"
+                cur.execute(sql, (company_name,))
+                result = cur.fetchone()
+                
+                if result:
+                    return result[0]
+                return None
+                
+        except Exception as e:
+            print(f"⚠️ Error retrieving field '{field_name}' for {company_name}: {e}")
+            return None
 
     def sync_sheet_data(self, df: pd.DataFrame):
         """
@@ -43,7 +88,7 @@ class DatabaseClient:
 
         with self.conn.cursor() as cur:
             for record in records:
-                # --- NEW JSON VALIDATION LOGIC ---
+                # --- JSON VALIDATION LOGIC ---
                 json_columns = ['price_history', 'funding_history']
                 for col in json_columns:
                     if col in record:
@@ -60,7 +105,7 @@ class DatabaseClient:
                         else:
                             # If it's empty, NaN, or None, set it to None for the DB
                             record[col] = None
-                # --- END OF NEW LOGIC ---
+                # --- END OF JSON VALIDATION ---
 
                 # Prepare for UPSERT
                 record = {k: v for k, v in record.items() if pd.notna(v)} # Remove any remaining NaN values
@@ -82,13 +127,10 @@ class DatabaseClient:
                     cur.execute(upsert_sql, list(record.values()))
                 except Exception as e:
                     print(f"Error on record '{record.get('name')}': {e}. Rolling back this record.")
-                    self.conn.rollback() # Rollback the single failed command
-                    # In a simple script, we might have to restart the transaction or handle it.
-                    # For now, we'll just report the error and continue. The main issue is the JSON validation.
+                    self.conn.rollback()
             
             self.conn.commit()
             print(f"✅ Sync process finished.")
-
 
     def update_scraped_data(self, company_name: str, data: dict):
         """
@@ -96,24 +138,40 @@ class DatabaseClient:
         - Investors/Overview are only updated if they are currently NULL or empty.
         - Other fields are updated unconditionally.
         """
-        if not self.conn: return
+        if not self.conn: 
+            return
 
         # Map scraped keys to DB columns
         key_to_col_map = {
-            'Overview': 'overview', 'Investors': 'investors',
-            'Highest Qualified Bid': 'highest_bid_price', 'Total Bid Volume': 'ez_total_bid_volume',
-            'Total Ask Volume': 'ez_total_ask_volume', 'Funding History': 'funding_history'
+            'Overview': 'overview',
+            'Investors': 'investors',
+            'Highest Qualified Bid': 'highest_bid_price',
+            'Total Bid Volume': 'ez_total_bid_volume',
+            'Total Ask Volume': 'ez_total_ask_volume',
+            'Funding History': 'funding_history',
+            # Additional mappings for other market activity fields
+            'Last 30D Transaction': 'last_30d_transaction',
+            'EquityZen Reference Price': 'equityzen_reference_price',
+            'Market Score': 'market_score'
         }
         
         unconditional_data = {}
         conditional_data = {}
 
         for key, value in data.items():
-            col = key_to_col_map.get(key.title().replace("Qualified ", "")) # Normalize key
-            if col in ['overview', 'investors']:
-                conditional_data[col] = value
-            elif col:
-                unconditional_data[col] = value
+            # Try direct mapping first
+            col = key_to_col_map.get(key)
+            
+            # If not found, try normalized key
+            if not col:
+                normalized_key = key.title().replace("Qualified ", "")
+                col = key_to_col_map.get(normalized_key)
+            
+            if col:
+                if col in ['overview', 'investors']:
+                    conditional_data[col] = value
+                else:
+                    unconditional_data[col] = value
 
         with self.conn.cursor() as cur:
             # 1. Unconditional updates (Market Activity, Funding)
@@ -122,12 +180,15 @@ class DatabaseClient:
                 sql = f"UPDATE companies SET {set_clause} WHERE name = %s"
                 try:
                     cur.execute(sql, list(unconditional_data.values()) + [company_name])
-                    print(f"   - DB: Updated unconditional data for {company_name}.")
+                    if cur.rowcount > 0:
+                        print(f"   - DB: Updated {len(unconditional_data)} unconditional field(s) for {company_name}.")
+                    else:
+                        print(f"   - DB: No rows updated (company may not exist): {company_name}")
                 except Exception as e:
                     print(f"   - ❌ DB Error (unconditional) for {company_name}: {e}")
                     self.conn.rollback()
             
-            # 2. Conditional updates (Overview, Investors)
+            # 2. Conditional updates (Overview, Investors) - only if currently empty
             if conditional_data:
                 for col, value in conditional_data.items():
                     sql = f"UPDATE companies SET {col} = %s WHERE name = %s AND ({col} IS NULL OR {col} = '')"
@@ -135,8 +196,10 @@ class DatabaseClient:
                         cur.execute(sql, (value, company_name))
                         if cur.rowcount > 0:
                             print(f"   - DB: Updated empty '{col}' for {company_name}.")
+                        else:
+                            print(f"   - DB: '{col}' already has data for {company_name}, skipped.")
                     except Exception as e:
-                        print(f"   - ❌ DB Error (conditional) for {company_name}: {e}")
+                        print(f"   - ❌ DB Error (conditional '{col}') for {company_name}: {e}")
                         self.conn.rollback()
             
             self.conn.commit()
@@ -144,5 +207,6 @@ class DatabaseClient:
     def close(self):
         if self.conn:
             self.conn.close()
+            print("✅ Database connection closed.")
 
 db_client = DatabaseClient()
