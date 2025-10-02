@@ -168,8 +168,8 @@ const CompanyModal = ({ company, onClose }) => {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
               <StatCard title="Sellers Ask" value={company.sellers_ask} icon={<FaArrowUp className="text-red-500" />} />
               <StatCard title="Buyers Bid" value={company.buyers_bid} icon={<FaArrowDown className="text-green-500" />} />
-              <StatCard title="Total Bids" value={company.total_bids} icon={<FaArrowDown />} />
-              <StatCard title="Total Asks" value={company.total_asks} icon={<FaArrowUp />} />
+              <StatCard title="EZ Total Bid Volume" value={company.ez_total_bid_volume} icon={<FaArrowDown />} />
+              <StatCard title="EZ Total Ask Volume" value={company.ez_total_ask_volume} icon={<FaArrowUp />} />
               <StatCard title="Highest Bid" value={company.highest_bid_price} icon={<FaArrowUp className="text-green-500"/>} />
               <StatCard title="Lowest Ask" value={company.lowest_ask_price} icon={<FaArrowDown className="text-red-500"/>} />
             </div>

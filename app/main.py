@@ -39,7 +39,7 @@ async def startup_event():
     await database.connect()
     print("--- INFO ---: Database connection established.")
     # Now, trigger the async data loading function in the search service
-    print("--- INFO ---: Initializing search service and syncing data...")
+    print("--- INFO ---: Initializing search service and syncing data with Pinecone...")
     await search_service._load_and_sync_data()
     print("--- INFO ---: Application startup complete. Search service is ready.")
 
@@ -57,7 +57,7 @@ async def shutdown_event():
 async def read_root():
     return {"status": "API is running"}
 
-# --- The search endpoints remain exactly the same, no changes needed ---
+# --- MODIFIED SEARCH ENDPOINTS ---
 @app.get("/search", response_model=List[Company], tags=["Search"])
 async def semantic_search_endpoint(
     q: str = Query(..., description="The natural language search query."),
@@ -71,7 +71,8 @@ async def semantic_search_endpoint(
     
     Example: `?q=innovative tech company in renewable energy`
     """
-    results = search_service.semantic_search(query=q, top_k=limit)
+    # --- FIX: Added 'await' to call the async function ---
+    results = await search_service.semantic_search(query=q, top_k=limit)
     return results
 
 @app.get("/advanced-search", response_model=List[Company], tags=["Search"])
@@ -93,7 +94,8 @@ async def advanced_search_endpoint(
     
     Example: `?sector=Fintech&valuation=$1B&sinarmas_interest=High`
     """
-    results = search_service.advanced_search(
+    # --- FIX: Added 'await' to call the async function ---
+    results = await search_service.advanced_search(
         name=name,
         sector=sector,
         valuation=valuation,

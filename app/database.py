@@ -33,8 +33,10 @@ companies = sqlalchemy.Table(
     sqlalchemy.Column("summary", sqlalchemy.Text, nullable=True),
     sqlalchemy.Column("sellers_ask", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("buyers_bid", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("total_bids", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("total_asks", sqlalchemy.String, nullable=True),
+    # --- FIX: Renamed columns to match frontend/model expectations ---
+    sqlalchemy.Column("ez_total_bid_volume", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("ez_total_ask_volume", sqlalchemy.String, nullable=True),
+    # --- END FIX ---
     sqlalchemy.Column("highest_bid_price", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("lowest_ask_price", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("price_history", sqlalchemy.Text, nullable=True), # Storing JSON as text
@@ -44,4 +46,4 @@ companies = sqlalchemy.Table(
 # You can add engine creation here if you need to create tables,
 # but since your data is already in Neon, we just need the definition.
 # engine = sqlalchemy.create_engine(settings.DATABASE_URL)
-# metadata.create_all(engine) # This line would create the table if it didn't exist
+# metadata.create_all(engine) # This line would create the table if it didn't exist

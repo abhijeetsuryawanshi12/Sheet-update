@@ -22,8 +22,8 @@ class Company(BaseModel):
     summary: Optional[str] = None
     sellers_ask: Optional[str] = None
     buyers_bid: Optional[str] = None
-    total_bids: Optional[str] = None
-    total_asks: Optional[str] = None
+    ez_total_bid_volume: Optional[str] = None
+    ez_total_ask_volume: Optional[str] = None
     highest_bid_price: Optional[str] = None
     lowest_ask_price: Optional[str] = None
     price_history: Optional[str] = None  # Expected to be a JSON string from the sheet

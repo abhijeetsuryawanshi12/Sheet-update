@@ -1,4 +1,3 @@
-# app/services/database.py
 import psycopg2
 import pandas as pd
 from app.config import settings
@@ -36,10 +35,9 @@ class DatabaseClient:
                     'total_funding', 'investors', 'valuation', 'overview', 'sector',
                     'sinarmas_interest', 'implied_valuation', 'share_transfer_allowed',
                     'liquidity_ez', 'liquidity_forge', 'liquidity_nasdaq', 'summary',
-                    'sellers_ask', 'buyers_bid', 'total_bids', 'total_asks',
+                    'sellers_ask', 'buyers_bid', 'ez_total_bid_volume', 'ez_total_ask_volume',
                     'highest_bid_price', 'lowest_ask_price', 'price_history',
-                    'funding_history', 'hiive_price', 'ez_total_bid_volume', 
-                    'ez_total_ask_volume'
+                    'funding_history'
                 ]
                 
                 if field_name not in allowed_fields:
@@ -74,9 +72,9 @@ class DatabaseClient:
             'Sector': 'sector', 'Sinarmas Interest': 'sinarmas_interest', 'Implied Valuation': 'implied_valuation',
             'Share transfer allowed ?': 'share_transfer_allowed', 'Liquidity EZ': 'liquidity_ez',
             'Liquidity Forge': 'liquidity_forge', 'Liquidity Nasdaq': 'liquidity_nasdaq', 'Summary': 'summary',
-            'Sellers Ask': 'sellers_ask', 'Buyers Bid': 'buyers_bid', 'Total Bids': 'total_bids',
-            'Total Asks': 'total_asks', 'Highest Bid Price': 'highest_bid_price', 'Lowest Ask Price': 'lowest_ask_price',
-            'Price History (JSON)': 'price_history', 'Funding History (JSON)': 'funding_history', 'Hiive Price': 'hiive_price',
+            'Sellers Ask': 'sellers_ask', 'Buyers Bid': 'buyers_bid', 
+            'Highest Bid Price': 'highest_bid_price', 'Lowest Ask Price': 'lowest_ask_price',
+            'Price History (JSON)': 'price_history', 'Funding History (JSON)': 'funding_history',
             'EZ Total Bid Volume': 'ez_total_bid_volume', 'EZ Total Ask Volume': 'ez_total_ask_volume'
         }
         df.rename(columns=column_mapping, inplace=True)
@@ -203,31 +201,58 @@ class DatabaseClient:
             
             self.conn.commit()
     
-    # In your app/services/database.py file, inside the DatabaseClient class:
-
-    # In your app/services/database.py file, inside the DatabaseClient class:
-
     def get_all_company_names(self):
         """
         Fetches a list of all unique company names from the database.
-        This method creates a temporary cursor to execute the query.
         """
-        # --- IMPORTANT ---
-        # 1. Replace 'your_table_name' with the actual name of your table.
-        # 2. If your connection object is not named `self.conn`, change it below (e.g., to `self.connection`).
-        query = "SELECT DISTINCT name FROM companies"
+        if not self.conn:
+            return []
+        
+        query = "SELECT DISTINCT name FROM companies WHERE name IS NOT NULL"
         
         try:
-            # Create a new cursor using the connection object
             with self.conn.cursor() as cursor:
                 cursor.execute(query)
-                # The result is a list of tuples, e.g., [('Company A',), ('Company B',)]
-                # We extract the first element from each tuple to create a simple list.
                 results = [item[0] for item in cursor.fetchall()]
                 return results
         except Exception as e:
-            print(f"Error fetching company names from database: {e}")
-            return [] # Return an empty list on failure
+            print(f"❌ Error fetching company names from database: {e}")
+            return []
+
+    # --- NEW METHOD for Hiive Scraper ---
+    def update_hiive_prices(self, company_name: str, highest_bid: str, lowest_ask: str):
+        """
+        Updates the highest bid and lowest ask prices for a specific company.
+        """
+        if not self.conn:
+            return
+
+        update_data = {}
+        if highest_bid:
+            update_data["highest_bid_price"] = highest_bid
+        if lowest_ask:
+            update_data["lowest_ask_price"] = lowest_ask
+
+        if not update_data:
+            print(f"   - DB: No Hiive price data provided for {company_name}.")
+            return
+
+        set_clause = ", ".join([f"{key} = %s" for key in update_data.keys()])
+        sql = f"UPDATE companies SET {set_clause} WHERE name = %s"
+        
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(sql, list(update_data.values()) + [company_name])
+                if cur.rowcount > 0:
+                    print(f"   - ✅ DB: Successfully updated Hiive prices for {company_name}.")
+                else:
+                    # This is not an error, the company might not exist in the DB.
+                    print(f"   - ⚠️ DB: Company '{company_name}' not found. No update performed.")
+                self.conn.commit()
+        except Exception as e:
+            print(f"   - ❌ DB Error updating Hiive prices for {company_name}: {e}")
+            self.conn.rollback()
+    # --- END NEW METHOD ---
 
     def close(self):
         if self.conn:
