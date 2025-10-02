@@ -3,16 +3,15 @@ from typing import List, Optional
 from app.models import Company
 from app.services.search import search_service
 from fastapi.middleware.cors import CORSMiddleware
+# --- ADDED IMPORTS ---
+from app.database import database
 
 app = FastAPI(
     title="Company CRM API",
-    description="API for searching company data from a Google Sheet.",
-    version="1.0.0"
+    description="API for searching company data from a PostgreSQL database.",
+    version="1.1.0"
 )
 
-# --- CORRECTED CORS MIDDLEWARE SECTION ---
-# This allows your frontend to communicate with your backend.
-# The wildcard pattern for Vercel has been moved to `allow_origin_regex`.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -27,20 +26,38 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
     allow_headers=["*"],  # Allows all headers
+
 )
-# ----------------------------------------
 
-
+# --- MODIFIED LIFECYCLE EVENTS ---
 @app.on_event("startup")
 async def startup_event():
-    # This will trigger the data loading and processing when the app starts.
-    # The SearchService is already initialized, so this is just for clarity.
-    print("Application startup complete. Search service is ready.")
+    """
+    On startup, connect to the database and trigger the data loading and syncing process.
+    """
+    print("--- INFO ---: Connecting to the database...")
+    await database.connect()
+    print("--- INFO ---: Database connection established.")
+    # Now, trigger the async data loading function in the search service
+    print("--- INFO ---: Initializing search service and syncing data with Pinecone...")
+    await search_service._load_and_sync_data()
+    print("--- INFO ---: Application startup complete. Search service is ready.")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """
+    On shutdown, disconnect from the database.
+    """
+    print("--- INFO ---: Disconnecting from the database...")
+    await database.disconnect()
+    print("--- INFO ---: Database connection closed.")
+# ---------------------------------
 
 @app.get("/", tags=["Health Check"])
 async def read_root():
     return {"status": "API is running"}
 
+# --- MODIFIED SEARCH ENDPOINTS ---
 @app.get("/search", response_model=List[Company], tags=["Search"])
 async def semantic_search_endpoint(
     q: str = Query(..., description="The natural language search query."),
@@ -54,7 +71,8 @@ async def semantic_search_endpoint(
     
     Example: `?q=innovative tech company in renewable energy`
     """
-    results = search_service.semantic_search(query=q, top_k=limit)
+    # --- FIX: Added 'await' to call the async function ---
+    results = await search_service.semantic_search(query=q, top_k=limit)
     return results
 
 @app.get("/advanced-search", response_model=List[Company], tags=["Search"])
@@ -64,11 +82,9 @@ async def advanced_search_endpoint(
     valuation: Optional[str] = Query(None, description="Minimum valuation (e.g., '$500M', '$1.2B')."),
     website: Optional[str] = Query(None, description="Website URL (case-insensitive, partial match)."),
     investors: Optional[str] = Query(None, description="Investors (case-insensitive, partial match)."),
-    # --- NEW FILTERS ---
     total_funding: Optional[str] = Query(None, description="Minimum total funding (e.g., '100M', '$2B')."),
     sinarmas_interest: Optional[str] = Query(None, description="Filter by Sinarmas Interest level (High, Medium, Low)."),
     share_transfer_allowed: Optional[str] = Query(None, description="Filter by share transfer permission (Yes, No).")
-    # -------------------
 ):
     """
     **Perform an advanced filtered search based on specific fields.**
@@ -78,16 +94,15 @@ async def advanced_search_endpoint(
     
     Example: `?sector=Fintech&valuation=$1B&sinarmas_interest=High`
     """
-    results = search_service.advanced_search(
+    # --- FIX: Added 'await' to call the async function ---
+    results = await search_service.advanced_search(
         name=name,
         sector=sector,
         valuation=valuation,
         website=website,
         investors=investors,
-        # --- PASS NEW FILTERS TO SERVICE ---
         total_funding=total_funding,
         sinarmas_interest=sinarmas_interest,
         share_transfer_allowed=share_transfer_allowed
-        # -----------------------------------
     )
     return results

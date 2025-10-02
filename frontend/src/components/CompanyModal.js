@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
-  FaTimes, FaBuilding, FaGlobe, FaFileInvoiceDollar, FaChartBar, FaChartLine, FaInfoCircle,
+  FaTimes, FaBuilding, FaGlobe, FaFileInvoiceDollar, FaChartBar, FaInfoCircle,
   FaTags, FaHandHoldingUsd, FaArrowUp, FaArrowDown, FaUsers, FaTable, FaBalanceScale,
   FaHandshake, FaFileSignature, FaWater, FaFlagCheckered
 } from 'react-icons/fa';
@@ -10,18 +10,11 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 // NOTE: You need to install recharts for the charts to work:
 // npm install recharts
 
-// --- MOCK DATA for demonstration ---
+// --- MOCK DATA for demonstration (Price History Only) ---
 const mockPriceHistory = [
   { name: 'Q1 \'23', price: 110 }, { name: 'Q2 \'23', price: 125 },
   { name: 'Q3 \'23', price: 120 }, { name: 'Q4 \'23', price: 140 },
   { name: 'Q1 \'24', price: 155 }, { name: 'Q2 \'24', price: 150 },
-];
-
-const mockFundingTable = [
-    { funding_date: '2022-10-20', share_class: 'Series C', amount_raised: '$250M', price_per_share: '$45.10', key_investors: 'Sequoia, a16z' },
-    { funding_date: '2021-05-15', share_class: 'Series B', amount_raised: '$120M', price_per_share: '$28.50', key_investors: 'Tiger Global' },
-    { funding_date: '2020-02-01', share_class: 'Series A', amount_raised: '$50M', price_per_share: '$15.00', key_investors: 'Insight Partners' },
-    { funding_date: '2019-01-10', share_class: 'Seed', amount_raised: '$20M', price_per_share: '$5.00', key_investors: 'Y Combinator' },
 ];
 
 // --- Helper Components ---
@@ -91,19 +84,36 @@ const parseJSON = (jsonString, fallback) => {
 
 const CompanyModal = ({ company, onClose }) => {
   const priceHistory = parseJSON(company.price_history, mockPriceHistory);
-  const fundingHistoryTable = parseJSON(company.funding_history, mockFundingTable);
   
+  // --- REAL DATA PARSING ---
+  // Parse the funding_history JSON string from the company data, fallback to an empty array
+  const fundingHistoryTable = parseJSON(company.funding_history, []);
+
+  // Separate the main data from the "Totals" row for special rendering
+  const totalsRow = Array.isArray(fundingHistoryTable) ? fundingHistoryTable.find(row => row['Share Class'] === 'Totals') : null;
+  const regularRows = Array.isArray(fundingHistoryTable) ? fundingHistoryTable.filter(row => row['Share Class'] !== 'Totals') : [];
+
+  // Generate chart data from the parsed funding history
   const fundingHistoryChart = (() => {
-    const data = fundingHistoryTable || [];
-    const byYear = data.reduce((acc, round) => {
-      const year = round.funding_date?.split('-')[0];
-      const amount = parseFloat(String(round.amount_raised).replace(/[^0-9.]/g, ''));
-      if (year && !isNaN(amount)) {
-        acc[year] = (acc[year] || 0) + amount;
-      }
-      return acc;
-    }, {});
-    const chartData = Object.entries(byYear).map(([year, amount]) => ({ year, amount })).sort((a,b) => a.year.localeCompare(b.year));
+    const data = regularRows || [];
+    const byYear = data
+      .filter(round => round['Date of Financing']) // Ensure there's a date to process
+      .reduce((acc, round) => {
+        const dateStr = round['Date of Financing']; // e.g., "7/22/2021"
+        const year = new Date(dateStr).getFullYear().toString();
+        
+        // Parse amount string like "$205,900,014.30"
+        const amount = parseFloat(String(round['Total Financing Size']).replace(/[^0-9.]/g, ''));
+        
+        if (year && !isNaN(amount)) {
+          // Aggregate amounts per year, converting to millions for the chart
+          acc[year] = (acc[year] || 0) + (amount / 1000000); 
+        }
+        return acc;
+      }, {});
+
+    // Sort data by year for the chart
+    const chartData = Object.entries(byYear).map(([year, amount]) => ({ year, amount: parseFloat(amount.toFixed(2)) })).sort((a,b) => a.year.localeCompare(b.year));
     return chartData.length > 0 ? chartData : [];
   })();
 
@@ -121,7 +131,7 @@ const CompanyModal = ({ company, onClose }) => {
         exit={{ y: 50, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-card-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
+        className="bg-card-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto relative scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
       >
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-primary-red transition-colors z-10">
           <FaTimes size={24} />
@@ -146,8 +156,6 @@ const CompanyModal = ({ company, onClose }) => {
               )}
             </div>
           </div>
-
-          {/* New Sections Layout */}
           
           <Section title="Company Details" icon={<FaInfoCircle />}>
             <p className="text-secondary-text mb-6 whitespace-pre-wrap">{company.summary || company.overview || 'No summary available.'}</p>
@@ -171,8 +179,8 @@ const CompanyModal = ({ company, onClose }) => {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
               <StatCard title="Sellers Ask" value={company.sellers_ask} icon={<FaArrowUp className="text-red-500" />} />
               <StatCard title="Buyers Bid" value={company.buyers_bid} icon={<FaArrowDown className="text-green-500" />} />
-              <StatCard title="Total Bids" value={company.total_bids} icon={<FaArrowDown />} />
-              <StatCard title="Total Asks" value={company.total_asks} icon={<FaArrowUp />} />
+              <StatCard title="EZ Total Bid Volume" value={company.ez_total_bid_volume} icon={<FaArrowDown />} />
+              <StatCard title="EZ Total Ask Volume" value={company.ez_total_ask_volume} icon={<FaArrowUp />} />
               <StatCard title="Highest Bid" value={company.highest_bid_price} icon={<FaArrowUp className="text-green-500"/>} />
               <StatCard title="Lowest Ask" value={company.lowest_ask_price} icon={<FaArrowDown className="text-red-500"/>} />
             </div>
@@ -221,22 +229,43 @@ const CompanyModal = ({ company, onClose }) => {
                         <tr>
                             <th className="px-4 py-2 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Date</th>
                             <th className="px-4 py-2 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Share Class</th>
+                            <th className="px-4 py-2 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Liq. Rank</th>
                             <th className="px-4 py-2 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Amount Raised</th>
                             <th className="px-4 py-2 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Price/Share</th>
-                            <th className="px-4 py-2 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Key Investors</th>
+                            <th className="px-4 py-2 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Shares Out.</th>
+                            <th className="px-4 py-2 text-left text-xs font-bold text-secondary-text uppercase tracking-wider">Liq. Preference</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {fundingHistoryTable.map((round, index) => (
+                        {regularRows.length > 0 ? regularRows.map((round, index) => (
                             <tr key={index}>
-                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round.funding_date}</td>
-                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round.share_class}</td>
-                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round.amount_raised}</td>
-                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round.price_per_share}</td>
-                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round.key_investors}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round['Date of Financing'] || 'N/A'}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round['Share Class'] || 'N/A'}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round['Liquidity Rank'] || 'N/A'}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round['Total Financing Size'] || 'N/A'}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round['Issue Price'] || 'N/A'}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round['Shares Outstanding'] || 'N/A'}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{round['Liquidation Preference'] || 'N/A'}</td>
                             </tr>
-                        ))}
+                        )) : (
+                            <tr>
+                                <td colSpan="7" className="text-center py-4 text-gray-500">No funding round data available.</td>
+                            </tr>
+                        )}
                     </tbody>
+                    {totalsRow && (
+                        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
+                            <tr>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{totalsRow['Date of Financing'] || ''}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{totalsRow['Share Class']}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{totalsRow['Liquidity Rank'] || ''}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{totalsRow['Total Financing Size']}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{totalsRow['Issue Price'] || ''}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{totalsRow['Shares Outstanding']}</td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm">{totalsRow['Liquidation Preference']}</td>
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
              </div>
           </Section>
