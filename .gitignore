@@ -5,3 +5,6 @@ instance/
 venv
 node_modules/
 credentials.json
+cookies.json
+equityzen_cookies.json
+hiive_cookies.json
